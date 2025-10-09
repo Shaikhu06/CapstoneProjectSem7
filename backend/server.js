@@ -11,21 +11,32 @@ const activityRouter = require("./routes/activity");
 
 const app = express();
 
+app.use(cors());
+app.use(bodyParser.json());
+
 app.get("/", (req, res) => {
   res.send("Carbon Tracker backend — visit /health or /api/emission-factors");
 });
+
+app.get('/health', (req, res)=>res.json({status:'ok'}))
 
 app.get("/.well-known/appspecific/com.chrome.devtools.json", (req, res) => {
   // Chrome/DevTools probe — reply small valid JSON
   return res.json({ status: "ok" });
 });
 
-app.use((req, res, next) => {
-  res.status(404).json({ error: "Not Found", path: req.originalUrl });
+app.use("/api", activityRouter);
+
+app.use(express.static(path.join(__dirname, "..", "frontend", "build")));
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "frontend", "build", "index.html"));
 });
 
-app.use(cors());
-app.use(bodyParser.json());
+// app.use((req, res, next) => {
+//   res.status(404).json({ error: "Not Found", path: req.originalUrl });
+// });
+
 
 // app.use((req, res, next) => {
 //   res.setHeader(
@@ -35,9 +46,7 @@ app.use(bodyParser.json());
 //   next();
 // });
 
-app.use("/api", activityRouter);
 
-app.use(express.static(path.join(__dirname, "..", "frontend", "build")));
 
 // keep the catch all added earlier
 
@@ -46,11 +55,6 @@ app.use((req, res) =>
 );
 
 
-app.get('/health', (req, res)=>res.json({status:'ok'}))
-
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "frontend", "build", "index.html"));
-});
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log("Server running on", PORT));

@@ -1,122 +1,177 @@
+// lib/main.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:fl_chart/fl_chart.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+void main() => runApp(CarbonApp());
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+const String BACKEND_BASE = 'http://10.0.2.2:4000'; // Android emulator; use localhost for iOS/simulator or ngrok URL for device
 
-  // This widget is the root of your application.
+class CarbonApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      title: 'Carbon Tracker MVP',
+      theme: ThemeData(primarySwatch: Colors.green),
+      home: HomePage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+class HomePage extends StatefulWidget { @override _HomePageState createState() => _HomePageState(); }
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class _HomePageState extends State<HomePage> {
+  String category = 'Travel';
+  String activity = 'Petrol Car';
+  double value = 0;
+  double lastEmission = 0;
+  Map<String, List<String>> factorItems = {};
+  List history = [];
+  List summary = [];
+  bool loading = true;
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
+  void initState() {
+    super.initState();
+    fetchFactors();
+    fetchSummary();
+  }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  Future<void> fetchFactors() async {
+    try {
+      final res = await http.get(Uri.parse('$BACKEND_BASE/api/emission-factors'));
+      if (res.statusCode == 200) {
+        final rows = jsonDecode(res.body) as List;
+        final map = <String, List<String>>{};
+        for (var r in rows) {
+          final cat = r['category'] ?? 'Other';
+          final it = r['item'] ?? 'Unknown';
+          map.putIfAbsent(cat, () => []).add(it);
+        }
+        setState(() {
+          factorItems = map;
+          category = map.keys.first;
+          activity = map[category]!.first;
+          loading = false;
+        });
+      } else {
+        setState(() => loading = false);
+      }
+    } catch (e) { setState(() => loading = false); }
+  }
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  Future<void> addActivity() async {
+    final body = {
+      'user_id': 1,
+      'category': category,
+      'activity': activity,
+      'value': value,
+      'unit': category == 'Travel' ? 'km' : (category == 'Food' ? 'meal' : '₹'),
+      'date': DateTime.now().toIso8601String().split('T')[0]
+    };
+    final res = await http.post(Uri.parse('$BACKEND_BASE/api/activity'),
+        headers: {'Content-Type': 'application/json'}, body: jsonEncode(body));
+    if (res.statusCode == 200) {
+      final js = jsonDecode(res.body);
+      setState(() {
+        lastEmission = (js['emission_kg'] ?? 0).toDouble();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Emission added: ${lastEmission.toStringAsFixed(2)} kg')));
+      fetchSummary();
+      fetchHistory();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error adding activity')));
+    }
+  }
+
+  Future<void> fetchSummary() async {
+    try {
+      final d = DateTime.now().toIso8601String().split('T')[0];
+      final res = await http.get(Uri.parse('$BACKEND_BASE/api/summary?user_id=1&date=$d'));
+      if (res.statusCode == 200) {
+        final js = jsonDecode(res.body);
+        setState(() {
+          summary = (js['data'] as List).map((e) => {'category': e['category'], 'total': (e['total'] as num).toDouble()}).toList();
+        });
+      }
+    } catch (e) {}
+  }
+
+  Future<void> fetchHistory() async {
+    try {
+      final d = DateTime.now().toIso8601String().split('T')[0];
+      final res = await http.get(Uri.parse('$BACKEND_BASE/api/history?user_id=1&from=$d&to=$d'));
+      if (res.statusCode == 200) {
+        setState(() {
+          history = jsonDecode(res.body);
+        });
+      }
+    } catch (e) {}
+  }
+
+  Widget _buildPie() {
+    if (summary.isEmpty) return Center(child: Text('No data for today'));
+    final sections = <PieChartSectionData>[];
+    double total = 0;
+    summary.forEach((s) => total += (s['total'] as double));
+    for (var s in summary) {
+      final val = (s['total'] as double);
+      final pct = total == 0 ? 0.0 : (val / total) * 100;
+      sections.add(PieChartSectionData(value: val, title: '${s['category']}\n${val.toStringAsFixed(1)}kg\n(${pct.toStringAsFixed(0)}%)', radius: 60));
+    }
+    return PieChart(PieChartData(sections: sections, sectionsSpace: 2, centerSpaceRadius: 20));
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    if (loading) return Scaffold(body: Center(child: CircularProgressIndicator()));
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+      appBar: AppBar(title: Text('Carbon MVP')),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Quick Add', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          SizedBox(height: 8),
+          DropdownButton<String>(
+            value: category,
+            items: factorItems.keys.map((k) => DropdownMenuItem(child: Text(k), value: k)).toList(),
+            onChanged: (v) => setState(() {
+              category = v!;
+              activity = factorItems[category]!.first;
+            }),
+          ),
+          SizedBox(height: 8),
+          DropdownButton<String>(
+            value: activity,
+            items: factorItems[category]!.map((it) => DropdownMenuItem(child: Text(it), value: it)).toList(),
+            onChanged: (v) => setState(() => activity = v!),
+          ),
+          SizedBox(height: 8),
+          TextField(
+            decoration: InputDecoration(labelText: category == 'Travel' ? 'Distance (km)' : (category == 'Food' ? 'No. of meals' : 'Amount ₹')),
+            keyboardType: TextInputType.number,
+            onChanged: (t) => setState(() => value = double.tryParse(t) ?? 0),
+          ),
+          SizedBox(height: 12),
+          ElevatedButton.icon(icon: Icon(Icons.add), label: Text('Add Activity'), onPressed: addActivity),
+          SizedBox(height: 16),
+          Text('Last emission: ${lastEmission.toStringAsFixed(2)} kg', style: TextStyle(fontSize: 16)),
+          Divider(),
+          Text('Today Summary', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          SizedBox(height: 8),
+          Container(height: 220, child: _buildPie()),
+          Divider(),
+          Text('Today History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ...history.map((h) => ListTile(
+            title: Text('${h['activity']} (${h['value']}${h['unit'] ?? ''})'),
+            subtitle: Text('${h['emission_kg']?.toStringAsFixed(2)} kg - ${h['log_date']}'),
+            dense: true,
+          )),
+          SizedBox(height: 24),
+          Center(child: Text('Simple badges: add 3 logs to get "Getting Started" badge')),
+        ]),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
