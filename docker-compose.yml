@@ -1,0 +1,32 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: carbon_tracker
+      POSTGRES_USER: ct_user
+      POSTGRES_PASSWORD: Carbon_tracker%4025
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./backend/db/schema-full.sql:/docker-entrypoint-initdb.d/00_schema.sql:ro
+    ports:
+      - '5432:5432'
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://ct_user:Carbon_tracker%4025@db:5432/carbon_tracker
+      - PORT=4000
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/usr/src/app
+      - ./backend/India-specific_Emission_Factors.csv:/usr/src/app/India-specific_Emission_Factors.csv:ro
+    ports:
+      - '4000:4000'
+
+volumes:
+  db_data:
