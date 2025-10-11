@@ -28,20 +28,20 @@ app.use(
 app.use(cors());
 app.use(bodyParser.json({ limi: '1mb' }));
 
-// CORS: allow all origins for development. Tighten for prod.
-app.use(cors());
-app.use(bodyParser.json({ limit: '1mb' }));
+// // CORS: allow all origins for development. Tighten for prod.
+// app.use(cors());
+// app.use(bodyParser.json({ limit: '1mb' }));
 
-// Optional: respond to root to avoid 404 noise (useful for browser checks)
-app.get('/', (req, res) => {
-  res.json({ status: 'carbon-backend', ok: true, time: new Date().toISOString() });
-});
+// // Optional: respond to root to avoid 404 noise (useful for browser checks)
+// app.get('/', (req, res) => {
+//   res.json({ status: 'carbon-backend', ok: true, time: new Date().toISOString() });
+// });
 
 // Optional: handle Chrome devtools .well-known path to stop 404 spam in console
-app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
-  // minimal harmless response
-  res.json({ name: 'carbon-backend', devtools: true, timestamp: new Date().toISOString() });
-});
+// app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
+//   // minimal harmless response
+//   res.json({ name: 'carbon-backend', devtools: true, timestamp: new Date().toISOString() });
+// });
 
 // routes
 const authRoutes = require('./routes/auth');
@@ -60,6 +60,19 @@ app.use('/api/admin', adminRoutes);
 
 // health
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+
+app.get("/", (req, res) => {
+  res.send(`
+    <h2>🌱 Carbon Footprint Tracker API</h2>
+    <p>Server is running successfully.</p>
+    <ul>
+      <li><a href="/health">/health</a> – Health check</li>
+      <li><a href="/api/factors">/api/factors</a> – Emission factors</li>
+      <li><a href="/api/activity/summary?user_id=1&date=2025-10-11">/api/activity/summary</a> – Daily summary</li>
+    </ul>
+  `);
+});
+
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
