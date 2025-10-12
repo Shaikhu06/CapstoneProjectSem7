@@ -25,28 +25,15 @@ app.use(
     },
   })
 );
+
+// CORS: allow all origins for development. Tighten for prod.
 app.use(cors());
-app.use(bodyParser.json({ limi: '1mb' }));
-
-// // CORS: allow all origins for development. Tighten for prod.
-// app.use(cors());
-// app.use(bodyParser.json({ limit: '1mb' }));
-
-// // Optional: respond to root to avoid 404 noise (useful for browser checks)
-// app.get('/', (req, res) => {
-//   res.json({ status: 'carbon-backend', ok: true, time: new Date().toISOString() });
-// });
-
-// Optional: handle Chrome devtools .well-known path to stop 404 spam in console
-// app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
-//   // minimal harmless response
-//   res.json({ name: 'carbon-backend', devtools: true, timestamp: new Date().toISOString() });
-// });
+app.use(bodyParser.json({ limit: '1mb' }));
 
 // routes
 const authRoutes = require('./routes/auth');
 const factorRoutes = require('./routes/factors');
-const activityRoutes = require('./routes/reports');
+const activityRoutes = require("./routes/activity");
 const reportRoutes = require('./routes/reports');
 const suggestionRoutes = require('./routes/suggestions');
 const adminRoutes = require('./routes/admin');
@@ -60,6 +47,12 @@ app.use('/api/admin', adminRoutes);
 
 // health
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+app.get("/api", (req, res) => {
+  res.json({
+    message:
+      "API root - available: /api/factors, /api/activity, /api/reports, /api/suggestions, /api/auth",
+  });
+});
 
 app.get("/", (req, res) => {
   res.send(`
