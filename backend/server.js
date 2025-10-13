@@ -7,24 +7,6 @@ const bodyParser = require("body-parser");
 
 const app = express();
 app.use(helmet());
-app.use(
-  helmet.contentSecurityPolicy({
-    useDefaults: true,
-    directives: {
-      "default-src": ["'self'"],
-      // allow XHR / fetch / websocket connections to local backend + emulator host
-      "connect-src": [
-        "'self'",
-        "http://localhost:4000",
-        "http://127.0.0.1:4000",
-        "http://10.0.2.2:4000", // Android emulator host
-      ],
-      "img-src": ["'self'", "data:"],
-      "script-src": ["'self'"],
-      "style-src": ["'self'", "'unsafe-inline'"],
-    },
-  })
-);
 
 // CORS: allow all origins for development. Tighten for prod.
 app.use(cors());
@@ -56,7 +38,7 @@ app.get("/api", (req, res) => {
 
 app.get("/", (req, res) => {
   res.send(`
-    <h2>🌱 Carbon Footprint Tracker API</h2>
+    <h2>Carbon Footprint Tracker API</h2>
     <p>Server is running successfully.</p>
     <ul>
       <li><a href="/health">/health</a> – Health check</li>

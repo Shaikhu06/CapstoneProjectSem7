@@ -3,6 +3,17 @@ const express = require("express");
 const router = express.Router();
 
 /**
+ * Health/ping endpoint for testing:
+ * GET /api/suggestions/ping
+ */
+router.get('/ping', (req, res) => {
+  res.json({ 
+    ok: true, 
+    msg: "suggestions route reachable" 
+  });
+});
+
+/**
  * POST /api/suggestions
  * body: { category, activity, value, unit }
  * returns array of suggestions (string)

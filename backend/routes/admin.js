@@ -8,8 +8,7 @@ const parse = require("csv-parse");
 
 const CSV_NAME = path.join(
   __dirname,
-  "..",
-  "India-specific_Emission_Factors.csv"
+  "../data/India-specific_Emission_Factors.csv"
 );
 
 // POST /api/admin/import  -> import CSV into emission_factors
